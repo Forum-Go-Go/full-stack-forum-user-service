@@ -1,8 +1,9 @@
 from flask import Flask, jsonify
-from database import db
+from models import db
 import os
 from dotenv import load_dotenv
 from flask_cors import CORS
+from controllers.user_blueprint import user_bp
 
 # load env file
 load_dotenv()
@@ -20,12 +21,15 @@ DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-app.url_map.strict_slashes = False
+# app.url_map.strict_slashes = False
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
+
+# app.register_blueprint(user_blueprint, url_prefix='/user')
+app.register_blueprint(user_bp)
 
 # Create user table
 with app.app_context():
@@ -36,7 +40,7 @@ with app.app_context():
 # root path
 @app.route("/")
 def index():
-    return "Hello from flax"
+    return "Hello from flask"
 
 
 @app.route("/users", methods=['GET'])
@@ -48,4 +52,4 @@ def get_users():
     return jsonify(users)
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True, use_reloader=False)
+    app.run(port=5001, debug=True, use_reloader=False)
