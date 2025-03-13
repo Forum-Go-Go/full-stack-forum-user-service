@@ -13,6 +13,9 @@ class User(db.Model):
     dateJoined = db.Column(db.DateTime, server_default=db.func.now())
     type = db.Column(db.String(50), nullable=False)  # change to enum type, 0: super admin, 1: admin, 2: user
     profileImageURL = db.Column(db.String(255))
+    
+    # Indicates whether the email is verified (True = verified, False = unverified)
+    verified = db.Column(db.Boolean, default=False, nullable=False)
 
     __table_args__ = (
         CheckConstraint("type IN ('admin', 'user', 'super_admin')", name="check_user_type"),
