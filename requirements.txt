@@ -6,3 +6,6 @@ flask-cors
 flask-bcrypt
 python-dotenv
 dotenv
+Werkzeug
+redis
+pika
