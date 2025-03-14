@@ -9,3 +9,4 @@ dotenv
 Werkzeug
 redis
 pika
+pymysql
