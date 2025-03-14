@@ -52,7 +52,7 @@ def register():
                 "firstName": new_user.firstName,
                 "lastName": new_user.lastName,
                 "email": new_user.email,
-                "dateJoined": new_user.dateJoined,
+                "dateJoined": new_user.dateJoined.strftime("%Y-%m-%d"),
                 "type": new_user.type,
                 "verified": new_user.verified
             }
@@ -61,6 +61,36 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Registration failed: {str(e)}"}), 500
+
+@user_bp.route("/search", methods=["GET"])
+def search_user_by_email():
+    """
+    Fetch a user's details based on an email query parameter.
+    Expected request: GET /users/search?email=user@example.com
+    Returns full user details including the hashed password.
+    """
+    email = request.args.get("email")
+    if not email:
+        return jsonify({"error": "Email parameter is required."}), 400
+
+    # Retrieve the user from the database by email
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({"error": "User not found."}), 404
+
+    # Prepare a response that includes the hashed password for internal use.
+    # Note: Exposing the hashed password publicly is not recommended.
+    user_data = {
+        "id": user.userId,
+        "firstName": user.firstName,
+        "lastName": user.lastName,
+        "email": user.email,
+        "hashedPassword": user.password,  # Assuming the model field is named 'password'
+        "dateJoined": user.dateJoined.strftime("%Y-%m-%d") if user.dateJoined else None,
+        "profileImageURL": user.profileImageURL,
+        "type": user.type
+    }
+    return jsonify(user_data), 200
 
 # request email verification: send code to user's email
 @user_bp.route("/verify_email/request", methods=["POST"])
@@ -125,12 +155,12 @@ def verify_email():
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
 
-# user login
-@user_bp.route("/login", methods=["POST"])
-def login():
-    return jsonify({"message": "Login endpoint working"}), 200
-    # data = request.get_json()
-    # user = User.query.filter_by(email=data.get("email")).first()
+# # user login
+# @user_bp.route("/login", methods=["POST"])
+# def login():
+#     return jsonify({"message": "Login endpoint working"}), 200
+#     # data = request.get_json()
+#     # user = User.query.filter_by(email=data.get("email")).first()
     
 
 # get/edit user profile

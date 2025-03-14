@@ -1,5 +1,5 @@
 from models import db
-from sqlalchemy import CheckConstraint
+from sqlalchemy.dialects.mysql import ENUM
 
 class User(db.Model):
     __tablename__ = 'user'
@@ -11,15 +11,11 @@ class User(db.Model):
     password = db.Column(db.String(255), nullable=False)
     active = db.Column(db.Boolean, default=True)
     dateJoined = db.Column(db.DateTime, server_default=db.func.now())
-    type = db.Column(db.String(50), nullable=False)  # change to enum type, 0: super admin, 1: admin, 2: user
+    type = db.Column(ENUM('super_admin', 'admin', 'user'), nullable=False, default='user')  
     profileImageURL = db.Column(db.String(255))
     
     # Indicates whether the email is verified (True = verified, False = unverified)
     verified = db.Column(db.Boolean, default=False, nullable=False)
-
-    __table_args__ = (
-        CheckConstraint("type IN ('admin', 'user', 'super_admin')", name="check_user_type"),
-    )
 
     def __repr__(self):
         return f"<User {self.email}>"
