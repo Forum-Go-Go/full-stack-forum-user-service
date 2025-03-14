@@ -36,7 +36,6 @@ with app.app_context():
     db.create_all()
     print("---User table created successfully!---")
 
-
 # root path
 @app.route("/")
 def index():

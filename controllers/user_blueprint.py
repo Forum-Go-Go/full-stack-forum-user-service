@@ -9,13 +9,32 @@ import pika
 
 user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
 
-# Redis used ofr storing verification code
+# Redis used for storing verification code
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
+# Create a persistent RabbitMQ connection
+rabbitmq_connection = None
+channel = None
+
 # RabbitMQ connection
-rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-channel = rabbitmq_connection.channel()
-channel.queue_declare(queue='email_queue')
+def connect_rabbitmq():
+    global rabbitmq_connection, channel
+    if rabbitmq_connection is None or rabbitmq_connection.is_closed:
+        rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        channel = rabbitmq_connection.channel()
+        channel.queue_declare(queue='email_queue', durable=True)  # Ensure queue exists
+
+# Ensure connection is open before sending messages
+def publish_to_rabbitmq(message):
+    global rabbitmq_connection, channel
+    try:
+        connect_rabbitmq()
+        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(message))
+        print(f"📩 Sent verification email request: {message}")
+    except pika.exceptions.StreamLostError as e:
+        print("❌ RabbitMQ Connection Lost. Reconnecting...")
+        connect_rabbitmq()
+        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(message))
 
 # generate 6-digit random code
 def generate_verification_code(length=6):
@@ -118,10 +137,8 @@ def request_verification():
             "email": data["email"],
             "code": verification_code
         }
-        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(email_payload))
 
-        # debug: check the generated code
-        print(f"Generated verification code for {data['email']}: {verification_code}")
+        publish_to_rabbitmq(email_payload)
 
         return jsonify({"message": "Verfication email sent"}), 200
 
