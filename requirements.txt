@@ -9,3 +9,5 @@ dotenv
 Werkzeug
 redis
 pika
+validate-email-address
+pymysql

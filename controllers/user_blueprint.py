@@ -9,7 +9,20 @@ import redis
 import pika
 import boto3
 import os
+import re
+from validate_email_address import validate_email
 
+# user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
+user_bp = Blueprint("user_bp", __name__)
+
+# Redis used for storing verification code
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+
+# Create a persistent RabbitMQ connection
+rabbitmq_connection = None
+channel = None
+
+# S3 configuration
 AWS_S3_BUCKET = 'fa-forum-user-profile-bucket'
 AWS_REGION='us-east-1'
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
@@ -22,15 +35,25 @@ s3_client = boto3.client(
     region_name=AWS_REGION
 )
 
-user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
-
-# Redis used ofr storing verification code
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
-
 # RabbitMQ connection
-rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-channel = rabbitmq_connection.channel()
-channel.queue_declare(queue='email_queue')
+def connect_rabbitmq():
+    global rabbitmq_connection, channel
+    if rabbitmq_connection is None or rabbitmq_connection.is_closed:
+        rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        channel = rabbitmq_connection.channel()
+        channel.queue_declare(queue='email_queue', durable=True)  # Ensure queue exists
+
+# Ensure connection is open before sending messages
+def publish_to_rabbitmq(message):
+    global rabbitmq_connection, channel
+    try:
+        connect_rabbitmq()
+        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(message))
+        print(f"📩 Sent verification email request: {message}")
+    except pika.exceptions.StreamLostError as e:
+        print("🔄 RabbitMQ Connection Lost. Reconnecting...")
+        connect_rabbitmq()
+        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(message))
 
 # generate 6-digit random code
 def generate_verification_code(length=6):
@@ -43,6 +66,15 @@ def register():
 
     if not data:
         return jsonify({"error": "Invalid request, JSON data required"}), 400
+
+    # email format validation
+    email = data.get("email")
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+    
+    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    if not re.match(email_regex, email):
+        return jsonify({"error": "Invalid email format"}), 400
 
     if User.query.filter_by(email=data["email"]).first():
         return jsonify({"error": "Email already registered"}), 400
@@ -133,10 +165,9 @@ def request_verification():
             "email": data["email"],
             "code": verification_code
         }
-        channel.basic_publish(exchange='', routing_key='email_queue', body=json.dumps(email_payload))
 
-        debug: check the generated code
         print(f"Generated verification code for {data['email']}: {verification_code}")
+        publish_to_rabbitmq(email_payload)
 
         return jsonify({"message": "Verfication email sent"}), 200
 
@@ -169,14 +200,6 @@ def verify_email():
                 }
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
-
-# user login
-# @user_bp.route("/login", methods=["POST"])
-# def login():
-#     return jsonify({"message": "Login endpoint working"}), 200
-#     data = request.get_json()
-#     user = User.query.filter_by(email=data.get("email")).first()
-    
 
 # get/edit user profile
 @user_bp.route("/<int:user_id>/profile", methods=["GET", "PUT"])
