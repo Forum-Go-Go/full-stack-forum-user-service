@@ -2,10 +2,13 @@ from flask import Blueprint, request, jsonify
 from models import db  # Use the shared db instance
 from models.user import User
 from werkzeug.security import generate_password_hash
+from werkzeug.utils import secure_filename
 import json
 import random
 import redis
 import pika
+import boto3
+import os
 import re
 from validate_email_address import validate_email
 
@@ -18,6 +21,19 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_respo
 # Create a persistent RabbitMQ connection
 rabbitmq_connection = None
 channel = None
+
+# S3 configuration
+AWS_S3_BUCKET = 'fa-forum-user-profile-bucket'
+AWS_REGION='us-east-1'
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_REGION
+)
 
 # RabbitMQ connection
 def connect_rabbitmq():
@@ -104,7 +120,7 @@ def search_user_by_email():
     if not email:
         return jsonify({"error": "Email parameter is required."}), 400
 
-    # Retrieve the user from the database by email
+#     # Retrieve the user from the database by email
     user = User.query.filter_by(email=email).first()
     if not user:
         return jsonify({"error": "User not found."}), 404
@@ -150,6 +166,7 @@ def request_verification():
             "code": verification_code
         }
 
+        print(f"Generated verification code for {data['email']}: {verification_code}")
         publish_to_rabbitmq(email_payload)
 
         return jsonify({"message": "Verfication email sent"}), 200
@@ -187,40 +204,60 @@ def verify_email():
 # get/edit user profile
 @user_bp.route("/<int:user_id>/profile", methods=["GET", "PUT"])
 def get_user_profile(user_id):
-    
     user = User.query.get(user_id)
 
     if not user:
         return jsonify({"error": "User not found"}), 404
     
     if request.method == "GET":
-      return jsonify({
-              "user": {
-                  "id": user.userId,
-                  "firstName": user.firstName,
-                  "lastName": user.lastName,
-                  "email": user.email,
-                  "dateJoined": user.dateJoined.strftime("%Y-%m-%d"),
-                  "profileImageURL": user.profileImageURL,
-                  "type": user.type,
-                  "topPosts": [],
-                  "drafts": [],
-                  "viewHistory": [],
-              }
-          }), 201
+        return jsonify({
+            "user": {
+                "id": user.userId,
+                "firstName": user.firstName,
+                "lastName": user.lastName,
+                "email": user.email,
+                "dateJoined": user.dateJoined.strftime("%Y-%m-%d"),
+                "profileImageURL": user.profileImageURL,
+                "type": user.type,
+                "topPosts": [],
+                "drafts": [],
+                "viewHistory": [],
+            }
+        }), 200
     
     elif request.method == "PUT":
-        data = request.get_json()
+        # First, check if the request contains both form data and files
+        data = request.form.to_dict() if "profileImage" in request.files else request.get_json()
 
         if not data:
-            return jsonify({"error": "Invalid request, JSON data required"}), 400
+            return jsonify({"error": "Invalid request, JSON data or file required"}), 400
 
-        # email verifcation? should we add new col of verfiy?
+        # Check if a profile image is included in the request
+        if "profileImage" in request.files:
+            image = request.files["profileImage"]
+
+            if image.filename == "":
+                return jsonify({"error": "No selected file"}), 400
+
+            filename = secure_filename(image.filename)
+            s3_key = f"profile_images/user_{user_id}/{filename}"
+
+            try:
+                # Upload image to AWS S3
+                s3_client.upload_fileobj(
+                image,
+                AWS_S3_BUCKET,
+                s3_key,
+                ExtraArgs={"ContentType": image.content_type},
+            )
+
+                # Store the S3 URL in the user profile
+                user.profileImageURL = f"https://{AWS_S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+            except Exception as e:
+                return jsonify({"error": f"Image upload failed: {str(e)}"}), 500
+
         if "email" in data:
             user.email = data["email"]
-        
-        if "profileImageURL" in data:
-            user.profileImageURL = data["profileImageURL"]
         
         db.session.commit()
 
