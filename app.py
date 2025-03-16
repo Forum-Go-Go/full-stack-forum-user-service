@@ -18,7 +18,6 @@ DB_NAME = os.getenv("DATABASE_NAME")
 # construct the database url
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 # app.url_map.strict_slashes = False
@@ -28,7 +27,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# app.register_blueprint(user_blueprint, url_prefix='/user')
+# app.register_blueprint(user_bp, url_prefix='/users')
 app.register_blueprint(user_bp)
 
 # Create user table
@@ -41,8 +40,7 @@ with app.app_context():
 def index():
     return "Hello from flask"
 
-
-@app.route("/users", methods=['GET'])
+@app.route("/get_user", methods=['GET'])
 def get_users():
     users = [
         {'id': 1, 'name': 'Alice'},
@@ -51,4 +49,4 @@ def get_users():
     return jsonify(users)
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5001, debug=True)

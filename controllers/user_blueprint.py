@@ -9,7 +9,8 @@ import pika
 import re
 from validate_email_address import validate_email
 
-user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
+# user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
+user_bp = Blueprint("user_bp", __name__)
 
 # Redis used for storing verification code
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
@@ -182,14 +183,6 @@ def verify_email():
                 }
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
-
-# # user login
-# @user_bp.route("/login", methods=["POST"])
-# def login():
-#     return jsonify({"message": "Login endpoint working"}), 200
-#     # data = request.get_json()
-#     # user = User.query.filter_by(email=data.get("email")).first()
-    
 
 # get/edit user profile
 @user_bp.route("/<int:user_id>/profile", methods=["GET", "PUT"])
