@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from flask_cors import CORS
 from controllers.user_blueprint import user_bp
+from controllers.admin_blueprint import admin_bp
 
 # load env file
 load_dotenv()
@@ -28,7 +29,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 app.register_blueprint(user_bp, url_prefix='/users')
-# app.register_blueprint(user_bp)
+app.register_blueprint(admin_bp, url_prefix='/admin')
 
 # Create user table
 with app.app_context():

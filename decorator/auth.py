@@ -31,8 +31,11 @@ def authenticate_user(required_roles=None, require_verified=False):
             # Check email verification status if required
             if require_verified and not user_verified:
                 return jsonify({"error": "Forbidden: Email verification required"}), 403
-
-            # return f(*args, user_id=user_id, user_role=user_role, user_verified=user_verified, **kwargs)  # pass user id, user role and verified status
-            return f(*args, user_role=user_role, user_verified=user_verified, **kwargs)  # just pass user role and verified, since the get user id is the parameter in get user profile endpoint
+            
+            # ✅ Avoid overriding `user_id` if it already exists in kwargs (like in route parameters)
+            if "user_id" not in kwargs:
+                return f(*args, user_id=header_user_id, user_role=user_role, user_verified=user_verified, **kwargs)
+            else:
+                return f(*args, user_role=user_role, user_verified=user_verified, **kwargs)
         return wrapper
     return decorator
