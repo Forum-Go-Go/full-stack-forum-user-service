@@ -27,8 +27,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# app.register_blueprint(user_bp, url_prefix='/users')
-app.register_blueprint(user_bp)
+app.register_blueprint(user_bp, url_prefix='/users')
+# app.register_blueprint(user_bp)
 
 # Create user table
 with app.app_context():

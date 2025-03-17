@@ -11,6 +11,7 @@ import boto3
 import os
 import re
 from validate_email_address import validate_email
+from decorator import authenticate_user
 
 # user_bp = Blueprint("user_bp", __name__, url_prefix='/users')
 user_bp = Blueprint("user_bp", __name__)
@@ -141,39 +142,39 @@ def search_user_by_email():
 
 # request email verification: send code to user's email
 @user_bp.route("/verify_email/request", methods=["POST"])
-def request_verification():
+@authenticate_user()
+def request_verification(user_id, user_verified, user_role):
     data = request.get_json()
-
     if not data or "email" not in data:
         return jsonify({"error": "Email is required"}), 400
     
     user = User.query.filter_by(email=data["email"]).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # send verification code
-    if "code" not in data:
-        if user.verified:
-            return jsonify({"message": "Email is alread verified"}), 200
+    if user.verified:
+        return jsonify({"message": "Email is alread verified"}), 200
     
-        # generate and store verification code in Redis, 3 - hour expiration 
-        verification_code = generate_verification_code()
-        redis_client.setex(f"email_verif:{data['email']}", 10800, verification_code)  # key name: email_verif
+    # generate and store verification code in Redis, 3 - hour expiration 
+    verification_code = generate_verification_code()
+    redis_client.setex(f"email_verif:{data['email']}", 10800, verification_code)  # key name: email_verif
 
-        # send message to RabbitMQ
-        email_payload = {
-            "email": data["email"],
-            "code": verification_code
-        }
+    # send message to RabbitMQ
+    email_payload = {
+        "email": data["email"],
+        "code": verification_code
+    }
 
-        print(f"Generated verification code for {data['email']}: {verification_code}")
-        publish_to_rabbitmq(email_payload)
+    print(f"Generated verification code for {data['email']}: {verification_code}")
+    publish_to_rabbitmq(email_payload)
 
-        return jsonify({"message": "Verfication email sent"}), 200
+    return jsonify({"message": "Verfication email sent"}), 200
 
 # verfiy email code
 @user_bp.route("/verify_email", methods=["POST"])
-def verify_email():
+@authenticate_user()
+def verify_email(user_id, user_verified, user_role):
     data = request.get_json()
 
     if not data or "email" not in data or "code" not in data:
@@ -201,9 +202,10 @@ def verify_email():
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
 
-# get/edit user profile
-@user_bp.route("/<int:user_id>/profile", methods=["GET", "PUT"])
-def get_user_profile(user_id):
+# get user profile
+@user_bp.route("/<int:user_id>/profile", methods=["GET"])
+@authenticate_user()  # email verification not required
+def get_user_profile(user_id, user_verified, user_role):
     user = User.query.get(user_id)
 
     if not user:
@@ -225,48 +227,61 @@ def get_user_profile(user_id):
             }
         }), 200
     
-    elif request.method == "PUT":
-        # First, check if the request contains both form data and files
-        data = request.form.to_dict() if "profileImage" in request.files else request.get_json()
+# update user profile
+@user_bp.route("/<int:user_id>/profile", methods=["PUT"])
+@authenticate_user()  # email verification not required
+def update_user_profile(user_id, user_verified, user_role):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "user not found"}), 404
 
-        if not data:
-            return jsonify({"error": "Invalid request, JSON data or file required"}), 400
+    # First, check if the request contains both form data and files
+    data = request.form.to_dict() if "profileImage" in request.files else request.get_json()
 
-        # Check if a profile image is included in the request
-        if "profileImage" in request.files:
-            image = request.files["profileImage"]
+    if not data:
+        return jsonify({"error": "Invalid request, JSON data or file required"}), 400
 
-            if image.filename == "":
-                return jsonify({"error": "No selected file"}), 400
+    # Ensure only the owner or an admin can update profile
+    if user_id != user.userId and user_role != "admin":
+        return jsonify({"error": "Forbidden: You can only update your own profile"}), 403
 
-            filename = secure_filename(image.filename)
-            s3_key = f"profile_images/user_{user_id}/{filename}"
+    # Check if a profile image is included in the request
+    if "profileImage" in request.files:
+        image = request.files["profileImage"]
 
-            try:
-                # Upload image to AWS S3
-                s3_client.upload_fileobj(
-                image,
-                AWS_S3_BUCKET,
-                s3_key,
-                ExtraArgs={"ContentType": image.content_type},
-            )
+        if image.filename == "":
+            return jsonify({"error": "No selected file"}), 400
 
-                # Store the S3 URL in the user profile
-                user.profileImageURL = f"https://{AWS_S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
-            except Exception as e:
-                return jsonify({"error": f"Image upload failed: {str(e)}"}), 500
+        filename = secure_filename(image.filename)
+        s3_key = f"profile_images/user_{user_id}/{filename}"
 
-        if "email" in data:
-            user.email = data["email"]
-        
-        db.session.commit()
+        try:
+            # Upload image to AWS S3
+            s3_client.upload_fileobj(
+            image,
+            AWS_S3_BUCKET,
+            s3_key,
+            ExtraArgs={"ContentType": image.content_type},
+        )
 
-        return jsonify({
-            "message": "Profile updated successfully",
-            "user": {
-                "id": user.userId,
-                "email": user.email,
-                "profileImageURL": user.profileImageURL,
-                "type": user.type
-            }
-        }), 200
+            # Store the S3 URL in the user profile
+            user.profileImageURL = f"https://{AWS_S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+        except Exception as e:
+            return jsonify({"error": f"Image upload failed: {str(e)}"}), 500
+
+    # Email updates requies verification
+    if "email" in data and data["email"] != user.email:
+        user.email = data["email"]
+        user.verified = False  # user becomes unverified after email change
+    
+    db.session.commit()
+
+    return jsonify({
+        "message": "Profile updated successfully",
+        "user": {
+            "id": user.userId,
+            "email": user.email,
+            "profileImageURL": user.profileImageURL,
+            "type": user.type
+        }
+    }), 200
