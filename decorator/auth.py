@@ -9,15 +9,20 @@ def authenticate_user(required_roles=None, require_verified=False):
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            # user_id = request.headers.get("X-User-ID")
+            header_user_id = request.headers.get("X-User-ID")
             user_role = request.headers.get("X-User-Role")
             user_verified = request.headers.get("X-User-Verified")
 
-            # if not user_id or not user_role:
-            #     return jsonify({"error": "Unauthorized: Missing authentication headers"}), 401
+            if not header_user_id or not user_role:
+                return jsonify({"error": "Unauthorized: Missing authentication headers"}), 401
 
+            try:
+                header_user_id = int(header_user_id)
+            except ValueError:
+                return jsonify({"error": "Invalid user ID format"}), 400
+            
             # Convert user_verified to boolean
-            user_verified = user_verified.lower() == "true"
+            user_verified = user_verified.lower() == "true" if user_verified else False
 
             # Check if role is allowed
             if required_roles and user_role not in required_roles:
@@ -27,7 +32,7 @@ def authenticate_user(required_roles=None, require_verified=False):
             if require_verified and not user_verified:
                 return jsonify({"error": "Forbidden: Email verification required"}), 403
 
-            # return f(*args, user_role=user_role, user_verified=user_verified, **kwargs)
-            return f(*args, user_role=user_role, user_verified=user_verified, **kwargs)
+            # return f(*args, user_id=user_id, user_role=user_role, user_verified=user_verified, **kwargs)  # pass user id, user role and verified status
+            return f(*args, user_role=user_role, user_verified=user_verified, **kwargs)  # just pass user role and verified, since the get user id is the parameter in get user profile endpoint
         return wrapper
     return decorator

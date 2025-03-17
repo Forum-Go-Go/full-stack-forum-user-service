@@ -3,6 +3,7 @@ from models import db  # Use the shared db instance
 from models.user import User
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import MultiDict
 import json
 import random
 import redis
@@ -211,38 +212,43 @@ def get_user_profile(user_id, user_verified, user_role):
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    if request.method == "GET":
-        return jsonify({
-            "user": {
-                "id": user.userId,
-                "firstName": user.firstName,
-                "lastName": user.lastName,
-                "email": user.email,
-                "dateJoined": user.dateJoined.strftime("%Y-%m-%d"),
-                "profileImageURL": user.profileImageURL,
-                "type": user.type,
-                "topPosts": [],
-                "drafts": [],
-                "viewHistory": [],
-            }
-        }), 200
+    return jsonify({
+        "user": {
+            "id": user.userId,
+            "firstName": user.firstName,
+            "lastName": user.lastName,
+            "email": user.email,
+            "dateJoined": user.dateJoined.strftime("%Y-%m-%d"),
+            "profileImageURL": user.profileImageURL,
+            "type": user.type,
+            "topPosts": [],
+            "drafts": [],
+            "viewHistory": [],
+        }
+    }), 200
     
 # update user profile
 @user_bp.route("/<int:user_id>/profile", methods=["PUT"])
 @authenticate_user()  # email verification not required
 def update_user_profile(user_id, user_verified, user_role):
+    print(f"🔥 Received files: {request.files}")  
+    print(f"🔥 Received form data: {request.form}")  
+    print(f"🔥 Received content type: {request.content_type}")
+
+    if not request.files and not request.form:
+        return jsonify({"error": "Flask did not receive any form data"}), 400
+
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "user not found"}), 404
 
     # First, check if the request contains both form data and files
-    data = request.form.to_dict() if "profileImage" in request.files else request.get_json()
-
-    if not data:
+    data = request.form.to_dict()
+    if not data and "profileImage" not in request.files:
         return jsonify({"error": "Invalid request, JSON data or file required"}), 400
 
     # Ensure only the owner or an admin can update profile
-    if user_id != user.userId and user_role != "admin":
+    if user_id != int(request.headers.get("X-User-ID", -1)) and user_role != "admin":
         return jsonify({"error": "Forbidden: You can only update your own profile"}), 403
 
     # Check if a profile image is included in the request
