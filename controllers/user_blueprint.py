@@ -137,7 +137,8 @@ def search_user_by_email():
         "hashedPassword": user.password,  # Assuming the model field is named 'password'
         "dateJoined": user.dateJoined.strftime("%Y-%m-%d") if user.dateJoined else None,
         "profileImageURL": user.profileImageURL,
-        "type": user.type
+        "type": user.type,
+        "verified": user.verified 
     }
     return jsonify(user_data), 200
 

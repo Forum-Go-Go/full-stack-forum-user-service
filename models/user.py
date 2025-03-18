@@ -15,7 +15,7 @@ class User(db.Model):
     profileImageURL = db.Column(db.String(255))
     
     # Indicates whether the email is verified (True = verified, False = unverified)
-    verified = db.Column(db.Boolean, default=False, nullable=False)
+    verified = db.Column(db.Boolean, default=False, nullable=False,)
 
     def __repr__(self):
         return f"<User {self.email}>"
