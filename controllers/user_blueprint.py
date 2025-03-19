@@ -138,7 +138,8 @@ def search_user_by_email():
         "dateJoined": user.dateJoined.strftime("%Y-%m-%d") if user.dateJoined else None,
         "profileImageURL": user.profileImageURL,
         "type": user.type,
-        "verified": user.verified 
+        "verified": user.verified,
+        "active": user.active
     }
     return jsonify(user_data), 200
 
