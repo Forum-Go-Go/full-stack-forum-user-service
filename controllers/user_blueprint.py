@@ -205,6 +205,8 @@ def verify_email(user_id, user_verified, user_role):
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
 
+DEFAULT_PROFILE_IMAGE = "https://fa-forum-user-profile-bucket.s3.us-east-1.amazonaws.com/profile_images/default_user.png"
+
 # get user profile
 @user_bp.route("/<int:user_id>/profile", methods=["GET"])
 @authenticate_user()  # email verification not required
@@ -221,7 +223,7 @@ def get_user_profile(user_id, user_verified, user_role):
             "lastName": user.lastName,
             "email": user.email,
             "dateJoined": user.dateJoined.strftime("%Y-%m-%d"),
-            "profileImageURL": user.profileImageURL,
+            "profileImageURL": user.profileImageURL or DEFAULT_PROFILE_IMAGE,
             "type": user.type,
             "topPosts": [],
             "drafts": [],
@@ -233,13 +235,6 @@ def get_user_profile(user_id, user_verified, user_role):
 @user_bp.route("/<int:user_id>/profile", methods=["PUT"])
 @authenticate_user()  # email verification not required
 def update_user_profile(user_id, user_verified, user_role):
-    print(f"🔥 Received files: {request.files}")  
-    print(f"🔥 Received form data: {request.form}")  
-    print(f"🔥 Received content type: {request.content_type}")
-
-    if not request.files and not request.form:
-        return jsonify({"error": "Flask did not receive any form data"}), 400
-
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "user not found"}), 404
@@ -289,7 +284,7 @@ def update_user_profile(user_id, user_verified, user_role):
         "user": {
             "id": user.userId,
             "email": user.email,
-            "profileImageURL": user.profileImageURL,
+            "profileImageURL": user.profileImageURL or DEFAULT_PROFILE_IMAGE,
             "type": user.type
         }
     }), 200
