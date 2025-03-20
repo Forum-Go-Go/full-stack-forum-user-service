@@ -205,9 +205,24 @@ def verify_email(user_id, user_verified, user_role):
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
 
-DEFAULT_PROFILE_IMAGE = "https://fa-forum-user-profile-bucket.s3.us-east-1.amazonaws.com/profile_images/default_user.png"
+# get 3 top posts
+POST_SERVICE_URL = "http://127.0.0.1:5009/posts"
+@user_bp.route("/<int:user_id>/top-posts", methods=["GET"])
+@authenticate_user()
+def get_top_posts(user_id, user_verified, user_role):
+    try:
+        response = request.get(f"{POST_SERVICE_URL}/user/{user_id}/top-posts")
 
+        if response.status_code == 200:
+            posts = response.json().get("posts", [])
+            return jsonify({"topPosts": posts}), 200
+        else: 
+            return jsonify({"error": "Failed to fetch top posts"}), response.status_code
+    except Exception as e:
+        return jsonify({"error": f"Error fetching top posts: {str(e)}"}), 500
+    
 # get user profile
+DEFAULT_PROFILE_IMAGE = "https://fa-forum-user-profile-bucket.s3.us-east-1.amazonaws.com/profile_images/default_user.png"
 @user_bp.route("/<int:user_id>/profile", methods=["GET"])
 @authenticate_user()  # email verification not required
 def get_user_profile(user_id, user_verified, user_role):
