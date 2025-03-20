@@ -10,6 +10,7 @@ import redis
 import pika
 import boto3
 import os
+import requests
 import re
 from validate_email_address import validate_email
 from decorator import authenticate_user
@@ -89,7 +90,8 @@ def register():
             email=data["email"],
             password=hashed_password,
             type=data["type"],
-            verified=False  # just register without email verification
+            verified=False,  # just register without email verification
+            active=True
         )
 
         db.session.add(new_user)
@@ -103,7 +105,8 @@ def register():
                 "email": new_user.email,
                 "dateJoined": new_user.dateJoined.strftime("%Y-%m-%d"),
                 "type": new_user.type,
-                "verified": new_user.verified
+                "verified": new_user.verified,
+                "active":new_user.active
             }
         }), 201
 
@@ -204,22 +207,6 @@ def verify_email(user_id, user_verified, user_role):
                 }
             }), 200
     return jsonify({"error": "Invalid verification code"}), 400
-
-# get 3 top posts
-POST_SERVICE_URL = "http://127.0.0.1:5009/posts"
-@user_bp.route("/<int:user_id>/top-posts", methods=["GET"])
-@authenticate_user()
-def get_top_posts(user_id, user_verified, user_role):
-    try:
-        response = request.get(f"{POST_SERVICE_URL}/user/{user_id}/top-posts")
-
-        if response.status_code == 200:
-            posts = response.json().get("posts", [])
-            return jsonify({"topPosts": posts}), 200
-        else: 
-            return jsonify({"error": "Failed to fetch top posts"}), response.status_code
-    except Exception as e:
-        return jsonify({"error": f"Error fetching top posts: {str(e)}"}), 500
     
 # get user profile
 DEFAULT_PROFILE_IMAGE = "https://fa-forum-user-profile-bucket.s3.us-east-1.amazonaws.com/profile_images/default_user.png"
