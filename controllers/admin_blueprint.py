@@ -14,14 +14,15 @@ import re
 from validate_email_address import validate_email
 from decorator import authenticate_user
 
+
 admin_bp = Blueprint("admin_bp", __name__)
 
 # get all user's information
 @admin_bp.route("/users", methods=["GET"])
-@authenticate_user()
+@authenticate_user(required_roles=['admin', 'super_admin'])
 def get_all_users(user_id, user_verified, user_role):
-    if user_role not in ["admin", "super_admin"]:
-        return jsonify({"error": "Forbidden: Only admin can access this data"})
+    # if user_role not in ["admin", "super_admin"]:
+    #     return jsonify({"error": "Forbidden: Only admin can access this data"})
 
     users = User.query.all()
     user_list = [
@@ -40,10 +41,10 @@ def get_all_users(user_id, user_verified, user_role):
 
 # Update user's account (active/banned)
 @admin_bp.route("/users/<int:user_id>/update-status", methods=["PUT"])
-@authenticate_user()
+@authenticate_user(required_roles=["admin", "super_admin"])
 def update_user_status(user_id, user_verified, user_role):
-    if user_role not in ["admin", "super_admin"]:
-        return jsonify({"error": "Forbidden: Only admin can access this data"})
+    # if user_role not in ["admin", "super_admin"]:
+    #     return jsonify({"error": "Forbidden: Only admin can access this data"})
 
     target_user = User.query.get(user_id)
     if not target_user:
@@ -73,10 +74,10 @@ def update_user_status(user_id, user_verified, user_role):
 
 # Super admin: promote a normal user to admin
 @admin_bp.route("/users/<int:user_id>/promote", methods=["PUT"])
-@authenticate_user()
+@authenticate_user(required_roles=['super_admin'])
 def promote_user(user_id, user_verified, user_role):
-    if user_role != "super_admin":
-        return jsonify({"error": "Forbidden: Only super_admin can promote users"}), 403
+    # if user_role != "super_admin":
+    #     return jsonify({"error": "Forbidden: Only super_admin can promote users"}), 403
     
     target_user = User.query.get(user_id)
     if not target_user:

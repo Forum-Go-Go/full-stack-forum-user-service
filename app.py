@@ -31,6 +31,9 @@ db.init_app(app)
 app.register_blueprint(user_bp, url_prefix='/users')
 app.register_blueprint(admin_bp, url_prefix='/admin')
 
+from shared.error_handlers import register_error_handlers
+register_error_handlers(app)
+
 # Create user table
 with app.app_context():
     db.create_all()
